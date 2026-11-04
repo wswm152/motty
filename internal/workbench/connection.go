@@ -46,8 +46,11 @@ type Connection interface {
 	DialContext(context.Context, string, string) (net.Conn, error)
 	// Listen asks the authenticated server to open a remote listener.
 	Listen(string, string) (net.Listener, error)
+	ListenContext(context.Context, string, string, func(net.Listener) error) (net.Listener, error)
 	// RunCommand executes one bounded command on the authenticated server.
 	RunCommand(context.Context, string, int) ([]byte, error)
+	// Exec runs one command without a PTY and preserves its exit status.
+	Exec(context.Context, string, int) (sshconn.ExecResult, error)
 	// StreamCommand runs a long-lived command and hands over its stdout lines
 	// as they arrive, until the callback stops or the context ends.
 	StreamCommand(context.Context, string, int, func([]byte) bool) error
@@ -106,6 +109,11 @@ func (conn realConn) OpenSCP() (sftpclient.Remote, error) {
 	return sftpclient.OpenSCP(conn.Conn.Client())
 }
 
+// Exec runs one bounded, non-PTY SSH command and preserves its exit status.
+func (conn realConn) Exec(ctx context.Context, command string, limit int) (sshconn.ExecResult, error) {
+	return conn.Conn.Exec(ctx, command, limit)
+}
+
 // scpOpener is a Connection that can move files over SCP. It is optional: only
 // a real SSH connection can.
 type scpOpener interface {
@@ -136,6 +144,13 @@ func openRemoteFiles(conn Connection, mode transferMode) (sftpclient.Remote, err
 }
 
 // Options configures the parts of the workbench that touch the outside world.
+// DragPreview is a picture that follows a drag outside every window.
+type DragPreview interface {
+	// MoveTo puts the picture's top-left at origin, in screen coordinates.
+	MoveTo(origin ui.Point)
+	Close()
+}
+
 type Options struct {
 	// DevelopmentSource offers a one-way import into an unused development
 	// profile. Nil disables discovery, including for explicit test profiles.
@@ -212,6 +227,11 @@ type Options struct {
 	// what dropping a tab outside every window does. Nil means a tab cannot be
 	// torn off.
 	TearOff func(origin ui.Point, adopt func(*State)) error
+	// OpenDragPreview shows a picture of size at origin (screen coordinates),
+	// drawn by paint, above every window; it is what follows a tab dragged out
+	// of every window, where no window can draw it. An error, or nil, means the
+	// platform cannot, and the window shows what it can at its own edge.
+	OpenDragPreview func(size ui.Size, origin ui.Point, paint func(canvas *ui.Canvas, size ui.Size)) (DragPreview, error)
 	// Blank starts the window empty: no tabs are restored into it.
 	Blank bool
 	// RememberWindowFrame saves where this window's content area is, and opens
@@ -221,6 +241,9 @@ type Options struct {
 	// OpenPath opens a local document with the system's default application. Nil
 	// uses app.OpenPath.
 	OpenPath func(string) error
+	// RevealPath selects a completed local download in the system's file manager.
+	// Nil uses app.RevealPath; tests may supply a recording function.
+	RevealPath func(string) error
 	// LaunchCustomEditor starts a user-chosen executable with one path. Nil uses
 	// Viva's system launcher.
 	LaunchCustomEditor func(executable, path string) error
@@ -332,6 +355,9 @@ func (options Options) withDefaults() Options {
 	}
 	if options.OpenPath == nil {
 		options.OpenPath = app.OpenPath
+	}
+	if options.RevealPath == nil {
+		options.RevealPath = app.RevealPath
 	}
 	if options.LaunchCustomEditor == nil {
 		options.LaunchCustomEditor = app.OpenWith
@@ -452,6 +478,7 @@ const (
 	modalWorkspaceDraft
 	modalWorkspaceSave
 	modalWorkspaceTemplateDelete
+	modalLocalProxy
 )
 
 // tone colors a session's headline.
@@ -658,8 +685,10 @@ func (state *State) finishStartingConnection(session *Session, automatic bool) {
 func (state *State) Wake() {
 	defer state.syncDesktopFullscreen()
 	defer state.flushLocalDirectories()
+	defer state.syncLocalProxySessions()
 	state.adoptHistoryClear()
 	state.adoptCompletion()
+	state.pumpRevealResults()
 	state.pumpFileWindows()
 	if state.syncPending {
 		state.syncPending = false
@@ -805,6 +834,7 @@ func (state *State) apply(session *Session, status sshconn.Status) {
 			state.tell(session, toldBanner, status)
 			state.sayStreamOpened(session)
 			state.startPendingForwards(session)
+			state.joinLocalProxy(session)
 		}
 		state.status = state.messages.StatusConnectedFmt + session.Title
 		if weak := status.Negotiated.Weak(); len(weak) > 0 && previousPhase != sshconn.PhaseConnected {
@@ -1135,6 +1165,9 @@ func (state *State) closeModal() {
 	}
 	if state.modal == modalWorkspaceTemplateDelete {
 		state.workspaceTemplateDelete = workspaceTemplateDelete{}
+	}
+	if state.modal == modalLocalProxy {
+		state.localProxyUI = localProxyUI{}
 	}
 	state.modal = modalNone
 	state.modalSession = 0

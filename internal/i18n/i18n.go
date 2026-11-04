@@ -8,6 +8,7 @@
 package i18n
 
 type HostGroupMessages struct {
+	ExpandAll, CollapseAll                        string
 	Actions, Rename, NewChild, Name, Save, Create string
 	InvalidName, Conflict, Missing                string
 	Move, Delete, Parent, TopLevel, Cycle         string
@@ -42,6 +43,8 @@ type Messages struct {
 	FileWindow     FileWindowMessages
 	SFTPWindow     SFTPWindowMessages
 	Transfers      TransferCenterMessages
+	// LocalProxy holds the compact SSH reverse-proxy panel.
+	LocalProxy LocalProxyMessages
 	// AIPanel and AISettings hold the assistant's texts; see ai_panel.go and
 	// ai_settings.go.
 	AIPanel    AIPanelMessages
@@ -364,6 +367,7 @@ type Messages struct {
 	ShortcutsCaptureDescription          string
 	ShortcutsConflictFmt                 string
 	ShortcutsInvalid                     string
+	ShortcutsTabNumberInvalid            string
 	ShortcutCommandPalette               string
 	ShortcutFind                         string
 	ShortcutFilesPath                    string
@@ -374,6 +378,7 @@ type Messages struct {
 	ShortcutCloseTab                     string
 	ShortcutNextTab                      string
 	ShortcutPreviousTab                  string
+	ShortcutTabNumber                    string
 	ShortcutClearScreen                  string
 	RecordingStart                       string
 	RecordingStop                        string
@@ -548,10 +553,15 @@ type Messages struct {
 	MenuCloseTabsToRight string
 	MenuCloseTabsBelow   string
 	MenuDuplicateTab     string
-	MenuRenameTab        string
-	MenuRenameTerminal   string
-	MenuLockTab          string
-	MenuUnlockTab        string
+	// MenuMoveTabToNewWindow is the tab menu's choice that gives the tab a
+	// window of its own; TabTearOffHint is what a drag says while the pointer is
+	// out of every window and letting go would do the same.
+	MenuMoveTabToNewWindow string
+	TabTearOffHint         string
+	MenuRenameTab          string
+	MenuRenameTerminal     string
+	MenuLockTab            string
+	MenuUnlockTab          string
 	// TabLockedHint is the tab's accessible description while it is protected.
 	TabLockedHint                 string
 	CloseLockedTabTitle           string

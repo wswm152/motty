@@ -50,6 +50,10 @@ type ToolsMessages struct {
 
 	// Snippets.
 	SnippetsTitle             string
+	SnippetTip                string
+	SnippetPickerPlaceholder  string
+	SnippetPickerEmpty        string
+	SnippetPickerAdd          string
 	SnippetsPageDescription   string
 	SnippetEmpty              string
 	SnippetEmptySub           string
@@ -478,6 +482,7 @@ type ToolsMessages struct {
 	UpdateWhyTranslocated           string
 	UpdateWhySystemInstall          string
 	UpdateWhyNoPackage              string
+	UpdateWhyPackageUnknown         string
 	UpdateWhyUnsigned               string
 	GeneralUpdateInstall            string
 	UpdateConfirmTitle              string
